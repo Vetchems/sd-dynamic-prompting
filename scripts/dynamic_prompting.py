@@ -84,6 +84,7 @@ class Script(scripts.Script):
 
         with gr.Group():
             with gr.Accordion("Dynamic Prompts", open=False):
+                replace_underscores = gr.Checkbox(label="Replace underscores", value=False)
                 is_combinatorial = gr.Checkbox(label="Combinatorial generation", value=False, elem_id="is-combinatorial")
                 combinatorial_batches = gr.Slider(label="Combinatorial batches", min=1, max=10, step=1, value=1, elem_id="combinatorial-times")
 
@@ -104,7 +105,8 @@ class Script(scripts.Script):
             magic_prompt_length,
             magic_temp_value,
             use_fixed_seed,
-            write_prompts
+            write_prompts,
+            replace_underscores
         ]
 
     def process(
@@ -164,14 +166,15 @@ class Script(scripts.Script):
         logger.info(
             f"Prompt matrix will create {updated_count} images in a total of {p.n_iter} batches."
         )
-
+        if replace_underscores:
+            all_prompts = [w.replace('_', ' ') for w in all_prompts]
         try:
             if write_prompts:
                 prompt_filename = get_unique_path(Path(p.outpath_samples), slugify(original_prompt))
                 prompt_filename.write_text("\n".join(all_prompts))
         except Exception as e:
             logger.error(f"Failed to write prompts to file: {e}")
-
+        
         p.all_prompts = all_prompts
         p.all_seeds = all_seeds
 
