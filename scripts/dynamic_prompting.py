@@ -120,6 +120,7 @@ class Script(scripts.Script):
         magic_temp_value,
         use_fixed_seed,
         write_prompts,
+        replace_underscores,
     ):
         fix_seed(p)
 
@@ -168,7 +169,7 @@ class Script(scripts.Script):
         )
         if replace_underscores:
             all_prompts = [w.replace('_', ' ') for w in all_prompts]
-            original_prompt = original_prompt.replace('_',' ')
+            #original_prompt = original_prompt.replace('_',' ')
         try:
             if write_prompts:
                 prompt_filename = get_unique_path(Path(p.outpath_samples), slugify(original_prompt))
