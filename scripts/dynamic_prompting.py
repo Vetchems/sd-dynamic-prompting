@@ -190,7 +190,7 @@ class Script(scripts.Script):
             magic_temp_value,
             use_fixed_seed,
             write_prompts,
-            replace_underscores
+            replace_underscores,
             unlink_seed_from_prompt,
             enable_jinja_templates,
         ]
