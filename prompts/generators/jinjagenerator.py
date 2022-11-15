@@ -18,11 +18,16 @@ class RandomExtension(Extension):
     def __init__(self, environment):
         super().__init__(environment)
         environment.globals["choice"] = self.choice
+        environment.globals["weighted_choice"] = self.weighted_choice
         environment.globals["random"] = self.random
         environment.globals["randint"] = self.randint
 
     def choice(self, *items):
         return random.choice(items)
+
+    def weighted_choice(self, *items):
+        population, weights = zip(*items)
+        return random.choices(population, weights=weights)[0]
 
     def random(self) -> float:
         return random.random()
@@ -93,7 +98,7 @@ class JinjaGenerator(PromptGenerator):
         self._template = template
         self._wildcard_manager = wildcard_manager
 
-    def generate(self, num_prompts=1):
+    def generate(self, num_prompts=1) -> list[str]:
         try:
             env = Environment(
                 extensions=[RandomExtension, PromptExtension, WildcardExtension, PermutationExtension]
