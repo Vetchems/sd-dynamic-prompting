@@ -21,7 +21,8 @@ from prompts.generators import (
     MagicPromptGenerator,
     BatchedCombinatorialPromptGenerator,
     PromptGenerator,
-    FeelingLuckyGenerator
+    FeelingLuckyGenerator,
+    DummyGenerator
 )
 
 from prompts.generators.jinjagenerator import JinjaGenerator
@@ -40,7 +41,7 @@ if wildcard_dir is None:
 else:
     WILDCARD_DIR = Path(wildcard_dir)
 
-VERSION = "0.25.1"
+VERSION = "0.27.3"
 
 
 wildcard_manager = WildcardManager(WILDCARD_DIR)
@@ -105,8 +106,10 @@ def new_generation(prompt) -> PromptGenerator:
     return generator
 
 class Script(scripts.Script):
-    def _create_generator(self, original_prompt, original_seed, is_feeling_lucky, enable_jinja_templates, is_combinatorial, is_magic_prompt, combinatorial_batches, magic_prompt_length, magic_temp_value):
-        if is_feeling_lucky:
+    def _create_generator(self, original_prompt, original_seed, is_dummy=False, is_feeling_lucky=False, enable_jinja_templates=False, is_combinatorial=False, is_magic_prompt=False, combinatorial_batches=1, magic_prompt_length=100, magic_temp_value=0.7):
+        if is_dummy:
+            return DummyGenerator(original_prompt)
+        elif is_feeling_lucky:
             generator = FeelingLuckyGenerator(original_prompt)
         elif enable_jinja_templates:
             generator = new_generation(original_prompt)
@@ -148,52 +151,66 @@ class Script(scripts.Script):
             with gr.Accordion("Dynamic Prompts", open=False):
                 replace_underscores = gr.Checkbox(label="Replace underscores", value=False)
                 is_enabled = gr.Checkbox(label="Dynamic Prompts enabled", value=True)
-                is_combinatorial = gr.Checkbox(
-                    label="Combinatorial generation",
-                    value=False,
-                    elem_id="is-combinatorial",
-                )
-                combinatorial_batches = gr.Slider(
-                    label="Combinatorial batches",
-                    min=1,
-                    max=10,
-                    step=1,
-                    value=1,
-                    elem_id="combinatorial-times",
-                )
 
+                with gr.Group():
+                    is_combinatorial = gr.Checkbox(
+                        label="Combinatorial generation",
+                        value=False,
+                        elem_id="is-combinatorial",
+                    )
+                    combinatorial_batches = gr.Slider(
+                        label="Combinatorial batches",
+                        min=1,
+                        max=10,
+                        step=1,
+                        value=1,
+                        elem_id="combinatorial-times",
+                    )
 
-                is_magic_prompt = gr.Checkbox(
-                    label="Magic prompt", value=False, elem_id="is-magicprompt"
-                )
-                magic_prompt_length = gr.Slider(
-                    label="Max magic prompt length",
-                    value=100,
-                    minimum=1,
-                    maximum=300,
-                    step=10,
-                )
-                magic_temp_value = gr.Slider(
-                    label="Magic prompt creativity",
-                    value=0.7,
-                    minimum=0.1,
-                    maximum=3.0,
-                    step=0.10,
-                )
+                with gr.Group():
+                    is_magic_prompt = gr.Checkbox(
+                        label="Magic prompt", value=False, elem_id="is-magicprompt"
+                    )
+                    magic_prompt_length = gr.Slider(
+                        label="Max magic prompt length",
+                        value=100,
+                        minimum=1,
+                        maximum=300,
+                        step=10,
+                    )
+                    magic_temp_value = gr.Slider(
+                        label="Magic prompt creativity",
+                        value=0.7,
+                        minimum=0.1,
+                        maximum=3.0,
+                        step=0.10,
+                    )
+
 
                 is_feeling_lucky = gr.Checkbox(
                     label="I'm feeling lucky", value=False, elem_id="is-feelinglucky"
                 )
 
-                use_fixed_seed = gr.Checkbox(
-                    label="Fixed seed", value=False, elem_id="is-fixed-seed"
-                )
+                
                 write_prompts = gr.Checkbox(
                     label="Write prompts to file", value=False, elem_id="write-prompts"
                 )
 
+                no_image_generation = gr.Checkbox(
+                    label="Don't generate images", value=False, elem_id="no-image-generation"
+                )
+
                 with gr.Accordion("Help", open=False):
                     info = gr.HTML(html)
+
+                with gr.Group():
+                    with gr.Accordion("Jinja2 templates", open=False):
+                        enable_jinja_templates = gr.Checkbox(
+                            label="Enable Jinja2 templates", value=False, elem_id="enable-jinja-templates"
+                        )
+
+                        with gr.Accordion("Help for Jinja2 templates", open=False):
+                            jinja_info = gr.HTML(jinja_help)
 
                 with gr.Group():
                     with gr.Accordion("Advanced options", open=False):
@@ -201,12 +218,15 @@ class Script(scripts.Script):
                             label="Unlink seed from prompt", value=False, elem_id="unlink-seed-from-prompt"
                         )
 
-                        enable_jinja_templates = gr.Checkbox(
-                            label="Enable Jinja2 templates", value=False, elem_id="enable-jinja-templates"
+                        disable_negative_prompt = gr.Checkbox(
+                            label="Disable negative prompt", value=False, elem_id="disable-negative-prompt"
                         )
 
-                        with gr.Accordion("Help for Jinja2 templates", open=False):
-                            jinja_info = gr.HTML(jinja_help)
+                        use_fixed_seed = gr.Checkbox(
+                           label="Fixed seed", value=False, elem_id="is-fixed-seed"
+                        )
+
+                        
 
         return [
             info,
@@ -221,10 +241,32 @@ class Script(scripts.Script):
             write_prompts,
             replace_underscores,
             unlink_seed_from_prompt,
+            disable_negative_prompt,
             enable_jinja_templates,
+            no_image_generation
         ]
 
-    def process_batch(self, p, *args, **kwargs):
+    def process_batch(self, p,
+        info,
+        is_enabled,
+        is_combinatorial,
+        combinatorial_batches,
+        is_magic_prompt,
+        is_feeling_lucky,
+        magic_prompt_length,
+        magic_temp_value,
+        use_fixed_seed,
+        write_prompts,
+        unlink_seed_from_prompt,
+        disable_negative_prompt,
+        enable_jinja_templates,
+        no_image_generation,
+        *args,
+        **kwargs
+    ):
+        if not is_enabled:
+            return p
+        
         generator = self._negative_prompt_generator
 
         try:
@@ -249,7 +291,9 @@ class Script(scripts.Script):
         write_prompts,
         replace_underscores,
         unlink_seed_from_prompt,
+        disable_negative_prompt,
         enable_jinja_templates,
+        no_image_generation,
     ):
 
         if not is_enabled:
@@ -275,25 +319,28 @@ class Script(scripts.Script):
             generator = self._create_generator(
                 original_prompt,
                 original_seed,
-                is_feeling_lucky,
-                enable_jinja_templates,
-                is_combinatorial,
-                is_magic_prompt,
-                combinatorial_batches,
-                magic_prompt_length,
-                magic_temp_value,
+                is_feeling_lucky=is_feeling_lucky,
+                enable_jinja_templates=enable_jinja_templates,
+                is_combinatorial=is_combinatorial,
+                is_magic_prompt=is_magic_prompt,
+                combinatorial_batches=combinatorial_batches,
+                magic_prompt_length=magic_prompt_length,
+                magic_temp_value=magic_temp_value,
+                is_dummy=False
             )
 
+        
             self._negative_prompt_generator = self._create_generator(
                 p.negative_prompt,
                 original_seed,
-                is_feeling_lucky,
-                enable_jinja_templates,
-                is_combinatorial,
-                is_magic_prompt,
-                combinatorial_batches,
-                magic_prompt_length,
-                magic_temp_value,
+                is_feeling_lucky=is_feeling_lucky,
+                enable_jinja_templates=enable_jinja_templates,
+                is_combinatorial=is_combinatorial,
+                is_magic_prompt=is_magic_prompt,
+                combinatorial_batches=combinatorial_batches,
+                magic_prompt_length=magic_prompt_length,
+                magic_temp_value=magic_temp_value,
+                is_dummy=disable_negative_prompt,
             )
 
             all_prompts = generator.generate(num_images)
@@ -332,6 +379,11 @@ class Script(scripts.Script):
             logger.error(f"Failed to write prompts to file: {e}")
         
         p.all_prompts = all_prompts
+        if no_image_generation:
+            # Need a minimum of batch size images to avoid errors
+            p.batch_size = 1
+            p.all_prompts = all_prompts[0:1]
+
         p.all_seeds = all_seeds
 
         p.prompt_for_display = original_prompt
