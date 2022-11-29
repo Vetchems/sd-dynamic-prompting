@@ -9,24 +9,34 @@ from . import PromptGenerator, re_combinations, re_wildcard
 
 logger = logging.getLogger(__name__)
 
-class RandomPromptGenerator(PromptGenerator):
-    def __init__(self, wildcard_manager: WildcardManager, template, seed:int = None):
-        self._wildcard_manager = wildcard_manager
 
-        if constants.UNLINK_SEED_FROM_PROMPT:
+class RandomPromptGenerator(PromptGenerator):
+    def __init__(
+        self,
+        wildcard_manager: WildcardManager,
+        template,
+        seed: int = None,
+        unlink_seed_from_prompt: bool = constants.UNLINK_SEED_FROM_PROMPT,
+    ):
+        self._wildcard_manager = wildcard_manager
+        self._unlink_seed_from_prompt = unlink_seed_from_prompt
+
+        if self._unlink_seed_from_prompt:
             self._random = random
         else:
             self._random = Random()
             if seed is not None:
                 self._random.seed(seed)
+            
+        
         self._template = template
 
-    def _parse_range(self, range_str, num_variants):
+    def _parse_range(self, range_str: str, num_variants: int) -> tuple[int, int]:
         default_low = 0
         default_high = num_variants
 
         if range_str is None:
-            return None
+            return (default_low, default_high)
 
         parts = range_str.split("-")
         if len(parts) == 1:
@@ -39,12 +49,23 @@ class RandomPromptGenerator(PromptGenerator):
 
         return min(low, high), max(low, high)
 
-    def _parse_combinations(self, combinations_str):
-        variants = [s.strip() for s in combinations_str.split("|")]
-        splits = variants[0].split("$$")
-        quantity = splits.pop(0) if len(splits) > 1 else str(constants.DEFAULT_NUM_COMBINATIONS)
-        joiner = splits.pop(0) if len(splits) > 1 else constants.DEFAULT_COMBO_JOINER
-        variants[0] = splits[0]
+    def _parse_combinations(
+        self, combinations_str: str
+    ) -> tuple[tuple[int, int], str, list[str]]:
+        variants = combinations_str.split("|")
+        joiner = constants.DEFAULT_COMBO_JOINER
+        quantity = str(constants.DEFAULT_NUM_COMBINATIONS)
+
+        sections = combinations_str.split("$$")
+
+        if len(sections) == 3:
+            joiner = sections[1]
+            sections.pop(1)
+
+        if len(sections) == 2:
+            quantity = sections[0]
+            variants = sections[1].split("|")
+
         low_range, high_range = self._parse_range(quantity, len(variants))
 
         return (low_range, high_range), joiner, variants
@@ -55,8 +76,10 @@ class RandomPromptGenerator(PromptGenerator):
             return ""
 
         combinations_str = match.groups()[0]
-        (low_range, high_range), joiner, variants = self._parse_combinations(combinations_str)
-        quantity = self._random.randint(low_range, high_range)        
+        (low_range, high_range), joiner, variants = self._parse_combinations(
+            combinations_str
+        )
+        quantity = self._random.randint(low_range, high_range)
         try:
             allow_repeats = len(variants) < quantity
             if allow_repeats:
@@ -67,7 +90,6 @@ class RandomPromptGenerator(PromptGenerator):
         except ValueError as e:
             logger.exception(e)
             return ""
-
 
     def _replace_wildcard(self, match):
         if match is None or len(match.groups()) == 0:
@@ -88,7 +110,6 @@ class RandomPromptGenerator(PromptGenerator):
         else:
             logging.warning(f"Could not find any wildcards in {wildcard}")
             return ""
-    
 
     def pick_variant(self, template):
         if template is None:
@@ -105,7 +126,9 @@ class RandomPromptGenerator(PromptGenerator):
         while True:
             counter += 1
             if counter > constants.MAX_RECURSIONS:
-                raise Exception("Too many recursions, something went wrong with generating the prompt")
+                raise Exception(
+                    "Too many recursions, something went wrong with generating the prompt"
+                )
 
             prompt = self.pick_variant(old_prompt)
             prompt = self.pick_wildcards(prompt)
@@ -116,9 +139,7 @@ class RandomPromptGenerator(PromptGenerator):
             old_prompt = prompt
 
     def generate(self, num_prompts) -> list[str]:
-        all_prompts = [
-            self.generate_prompt(self._template) for _ in range(num_prompts)
-        ]
+        all_prompts = [self.generate_prompt(self._template) for _ in range(num_prompts)]
 
         return all_prompts
 
