@@ -43,7 +43,7 @@ if wildcard_dir is None:
 else:
     WILDCARD_DIR = Path(wildcard_dir)
 
-VERSION = "0.29.8"
+VERSION = "0.29.11"
 
 
 wildcard_manager = WildcardManager(WILDCARD_DIR)
@@ -65,7 +65,7 @@ def old_generation(
     is_combinatorial: bool,
     combinatorial_batches: int,
     original_seed: int,
-    unlink_seed_from_prompt: bool = False
+    unlink_seed_from_prompt: bool = False,
 ) -> PromptGenerator:
     if is_combinatorial:
         prompt_generator = CombinatorialPromptGenerator(
@@ -128,7 +128,11 @@ class Script(scripts.Script):
             generator = new_generation(original_prompt)
         else:
             generator = old_generation(
-                original_prompt, is_combinatorial, combinatorial_batches, original_seed, unlink_seed_from_prompt
+                original_prompt,
+                is_combinatorial,
+                combinatorial_batches,
+                original_seed,
+                unlink_seed_from_prompt,
             )
 
         if is_magic_prompt:
@@ -276,40 +280,6 @@ class Script(scripts.Script):
             no_image_generation,
         ]
 
-    def process_batch(
-        self,
-        p,
-        info,
-        is_enabled,
-        is_combinatorial,
-        combinatorial_batches,
-        is_magic_prompt,
-        is_feeling_lucky,
-        is_attention_grabber,
-        magic_prompt_length,
-        magic_temp_value,
-        use_fixed_seed,
-        write_prompts,
-        unlink_seed_from_prompt,
-        disable_negative_prompt,
-        enable_jinja_templates,
-        no_image_generation,
-        *args,
-        **kwargs,
-    ):
-        if not is_enabled:
-            logger.debug("Dynamic prompts disabled - exiting")
-            return p
-
-        generator = self._negative_prompt_generator
-
-        try:
-            p.negative_prompt = generator.generate(1)[0]
-        except GeneratorException as e:
-            logger.exception(e)
-            all_prompts = [str(e)]
-            p.negative_prompt = str(e)
-
     def process(
         self,
         p,
@@ -366,7 +336,7 @@ class Script(scripts.Script):
             )
 
             logger.debug("Creating negative generator")
-            self._negative_prompt_generator = self._create_generator(
+            negative_prompt_generator = self._create_generator(
                 p.negative_prompt,
                 original_seed,
                 is_feeling_lucky=is_feeling_lucky,
@@ -382,12 +352,20 @@ class Script(scripts.Script):
             )
 
             all_prompts = generator.generate(num_images)
-            p.negative_prompt = self._negative_prompt_generator.generate(1)[0]
+            all_negative_prompts = negative_prompt_generator.generate(num_images)
+            total_prompts = len(all_prompts)
+
+            if len(all_negative_prompts) < total_prompts:
+                all_negative_prompts = all_negative_prompts * (
+                    total_prompts // len(all_negative_prompts) + 1
+                )
+
+            all_negative_prompts = all_negative_prompts[:total_prompts]
 
         except GeneratorException as e:
             logger.exception(e)
             all_prompts = [str(e)]
-            p.negative_prompt = str(e)
+            all_negative_prompts = [str(e)]
 
         updated_count = len(all_prompts)
         p.n_iter = math.ceil(updated_count / p.batch_size)
@@ -420,6 +398,7 @@ class Script(scripts.Script):
             logger.error(f"Failed to write prompts to file: {e}")
         
         p.all_prompts = all_prompts
+        p.all_negative_prompts = all_negative_prompts
         if no_image_generation:
             logger.debug("No image generation requested - exiting")
             # Need a minimum of batch size images to avoid errors
