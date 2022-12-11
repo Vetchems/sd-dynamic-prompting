@@ -3,9 +3,6 @@ import logging
 from string import Template
 from pathlib import Path
 import math
-import unicodedata
-import re
-import random
 
 import gradio as gr
 
@@ -29,35 +26,33 @@ from prompts.generators import (
 from prompts.generators.jinjagenerator import JinjaGenerator
 from prompts.generators.promptgenerator import GeneratorException
 from prompts import constants
-from prompts.utils import slugify
+from prompts.utils import slugify, get_unique_path
+from prompts import prompt_writer
+from ui import wildcards_tab
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+is_debug = getattr(opts, "is_debug", False)
+if is_debug:
+    logger.setLevel(logging.DEBUG)
+
 base_dir = Path(scripts.basedir())
 
 wildcard_dir = getattr(opts, "wildcard_dir", None)
+
 
 if wildcard_dir is None:
     WILDCARD_DIR = base_dir / "wildcards"
 else:
     WILDCARD_DIR = Path(wildcard_dir)
 
-VERSION = "0.29.11"
+VERSION = "1.2.0"
 
 
 wildcard_manager = WildcardManager(WILDCARD_DIR)
-
-
-def get_unique_path(directory: Path, original_filename) -> Path:
-    filename = original_filename
-    for i in range(1000):
-        path = (directory / filename).with_suffix(".txt")
-        if not path.exists():
-            return path
-        filename = f"{slugify(original_filename)}-{math.floor(random.random() * 1000)}"
-
-    raise Exception("Failed to find unique path")
+wildcards_tab.initialize(wildcard_manager)
 
 
 def old_generation(
@@ -82,8 +77,35 @@ def old_generation(
     return prompt_generator
 
 
-def new_generation(prompt) -> PromptGenerator:
-    generator = JinjaGenerator(prompt, wildcard_manager)
+def new_generation(prompt, p) -> PromptGenerator:
+    context = {
+        "model": {
+            "filename": p.sd_model.sd_checkpoint_info.filename,
+            "title": p.sd_model.sd_checkpoint_info.title,
+            "hash": p.sd_model.sd_checkpoint_info.hash,  
+            "model_name": p.sd_model.sd_checkpoint_info.model_name,
+        },
+        "image": {
+            "width": p.width,
+            "height": p.height,
+        },
+        "parameters": {
+            "steps": p.steps,
+            "batch_size": p.batch_size,
+            "num_batches": p.n_iter,
+            "width": p.width,
+            "height": p.height,
+            "cfg_scale": p.cfg_scale,
+            "sampler_name": p.sampler_name,
+            "seed": p.seed,
+        },
+        "prompt": {
+            "prompt": prompt,
+            "negative_prompt": p.negative_prompt,
+        }
+    }
+
+    generator = JinjaGenerator(prompt, wildcard_manager, context)
     return generator
 
 
@@ -125,7 +147,7 @@ class Script(scripts.Script):
         elif is_feeling_lucky:
             generator = FeelingLuckyGenerator(original_prompt)
         elif enable_jinja_templates:
-            generator = new_generation(original_prompt)
+            generator = new_generation(original_prompt, self._p)
         else:
             generator = old_generation(
                 original_prompt,
@@ -137,7 +159,7 @@ class Script(scripts.Script):
 
         if is_magic_prompt:
             generator = MagicPromptGenerator(
-                generator, magic_prompt_length, magic_temp_value
+                generator, magic_prompt_length, magic_temp_value, seed=original_seed
             )
 
         if is_attention_grabber:
@@ -163,7 +185,7 @@ class Script(scripts.Script):
         jinja_html_path = base_dir / "jinja_help.html"
         jinja_help = jinja_html_path.open().read()
 
-        with gr.Group():
+        with gr.Group(elem_id="dynamic-prompting"):
             with gr.Accordion("Dynamic Prompts", open=False):
                 replace_underscores = gr.Checkbox(label="Replace underscores", value=False)
                 is_enabled = gr.Checkbox(
@@ -304,10 +326,18 @@ class Script(scripts.Script):
         if not is_enabled:
             logger.debug("Dynamic prompts disabled - exiting")
             return p
+        
+        self._p = p
 
         fix_seed(p)
 
-        original_prompt = p.prompt[0] if type(p.prompt) == list else p.prompt
+        original_prompt = p.all_prompts[0] if len(p.all_prompts) > 0 else p.prompt
+        original_negative_prompt = (
+            p.all_negative_prompts[0]
+            if len(p.all_negative_prompts) > 0
+            else p.negative_prompt
+        )
+
         original_seed = p.seed
         num_images = p.n_iter * p.batch_size
 
@@ -317,7 +347,7 @@ class Script(scripts.Script):
                 combinatorial_batches = 1
         except (ValueError, TypeError):
             combinatorial_batches = 1
-
+        
         try:
             logger.debug("Creating positive generator")
             generator = self._create_generator(
@@ -337,7 +367,7 @@ class Script(scripts.Script):
 
             logger.debug("Creating negative generator")
             negative_prompt_generator = self._create_generator(
-                p.negative_prompt,
+                original_negative_prompt,
                 original_seed,
                 is_feeling_lucky=is_feeling_lucky,
                 is_attention_grabber=is_attention_grabber,
@@ -385,15 +415,12 @@ class Script(scripts.Script):
             all_prompts = [w.replace('_', ' ') for w in all_prompts]
             #original_prompt = original_prompt.replace('_',' ')
         try:
+            
             if write_prompts:
                 prompt_filename = get_unique_path(
-                    Path(p.outpath_samples), slugify(original_prompt)
+                    Path(p.outpath_samples), slugify(original_prompt), suffix="csv"
                 )
-                prompt_filename.write_text(
-                    "\n".join(all_prompts),
-                    encoding=constants.DEFAULT_ENCODING,
-                    errors="ignore",
-                )
+                prompt_writer.write_prompts(prompt_filename, original_prompt, original_negative_prompt, all_prompts, all_negative_prompts)
         except Exception as e:
             logger.error(f"Failed to write prompts to file: {e}")
         

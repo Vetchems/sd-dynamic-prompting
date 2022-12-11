@@ -71,3 +71,13 @@
 0.29.9 Now using all_negative_prompts. Each image now uses its own negative prompt. Thanks to @lilly1987 
 0.29.10 Fixed a bug the occurred when more positive prompts are created than negative prompts.
 0.29.11 Wildcards are sorted alphabetically before use - https://github.com/adieyal/sd-dynamic-prompts/issues/85
+0.29.12 Fixes broken styles = https://github.com/adieyal/sd-dynamic-prompts/issues/73
+0.29.13 Fixes broken styles for negative prompts = https://github.com/adieyal/sd-dynamic-prompts/issues/73
+0.29.14 Fixes duplicate wildcards - https://github.com/adieyal/sd-dynamic-prompts/issues/88
+0.29.15 Fixes fixed magic prompt - seed issue - https://github.com/adieyal/sd-dynamic-prompts/issues/90
+1.0 Added a rudimentary wildcard manager - more to follow
+1.0.1 Ensure that the wildcards tree is only loaded once
+1.0.2 Wildcard hierarchy is now alphabetically sorted
+1.0.3 Improved wildcards tab interface
+1.1.0 Updated write prompts to file. Now outputs a csv files with both positive and negative prompts
+1.2.0 Added render variables to jinja2 context - see the jinja2.md for details
