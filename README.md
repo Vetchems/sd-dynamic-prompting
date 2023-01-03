@@ -1,6 +1,11 @@
 # Stable Diffusion Dynamic Prompts extension 
-
 A custom extension for [AUTOMATIC1111/stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) that implements an expressive template language for random or combinatorial prompt generation along with features to support deep wildcard directory structures.
+
+<p align="center">                                                                                         
+    <a href="docs/SYNTAX.md"><img src="images/icon-syntax.png" valign="middle" style="height:40px"/></a>
+    <a href="docs/CHANGELOG.md"><img src="images/icon-changelog.png" valign="middle" style="height:40px"/></a>
+</p>
+
 
 <img src="images/extension.png"/>
 
@@ -34,8 +39,7 @@ You can also use the same wildcard twice
 - I love Winter better than Summer
 - I love Spring better than Spring
 
-## AlwaysVisible
-As of v0.17.0, Dynamic Prompts is an AlwaysVisible script. That means that it will co-exist with other scripts like X/Y Plot without needing to explicitly enable it. Big thanks to [@stysmmaker](https://github.com/stysmmaker) for this small but significant change.
+More complete documentation can be found [here](docs/SYNTAX.md).
 
 ## Installation
 
@@ -53,73 +57,7 @@ Dynamic Prompts works particularly well with the following scripts:
 
 
 ## Template syntax
-
-### Combinations
-	{2$$opt1|opt2|opt3}
-
-This will randomly combine two of the options for every batch, separated with a comma.  In this case, "opt1, opt2" or "opt2, opt3", or "opt1, opt3" or the same pairs in the reverse order.
-
-	{1-3$$opt1|opt2|opt3}
-
-This will use a random number of options between 1 and 3 for each batch. 
-
-If the quantity of combinations chosen is greater than the number of options listed then options may be repeated in the output.
-If the quantity of combination chosen is less than or equal to the number of options listed then the same options will not be chosen more than once.
-
-	{4$$and$$opt1|opt2|opt3|opt4|opt5}
-
-This will choose 4 options and join them together with 'and' instead of the default comma. When there are multiple $$ tokens then the first item is the number of options to choose and the second option is the joiner to use.
-	{-$$opt1|opt2|opt3}
-
-An omitted minimum is assumed to be 0 and an omitted maximum is assumed to be the number of options.
-
-
-	{opt1|opt2|opt3}
-If you omit the $$ prefix, one item will be selected. (Equivalent to 1$$)
-
-Options are chosen randomly with replacement. This means that {2$$opt1|opt2} can return any of the following:
-- opt1, opt1
-- opt1, opt2
-- opt2, opt1
-- opt2, opt2
-
-This is useful in conjunction with wildcards (see below).
-
-### Wildcard files
-Wildcards are text files (ending in .txt). Each line contains a term, artist name, or modifier. The wildcard file can then be embedded in your prompt by removing the .txt extension and surrounding it with double underscores. e.g:
-
-	My favourite colour is __colours__
-
-Empty lines and lines starting with `#` are ignored. This can be used to add comments or disable sections of the file.
-
-Mixing Combinations and Wildcards can be useful. For example,
-
-	a photo of a {2-4$$and$$__adjective__} house
-
-will choose between 2 and 4 options from adjective.txt, join them together with "and", for results such as "a photo of a cozy and ancient and delicate house"
-
-
-### Nesting
-You can nest combinations inside wildcards. This means that you can create more advanced templates. For example:
-
-    {__seasons__|__timeofday__}
-
-This will then either choose a season from seasons.txt or a time of day from timeofday.txt.
-
-### Recursion
-Prompts are processed recursively. If a wildcard file contains a row with dynamic syntax, then that will be resolved as well. For example if seasons.txt contains the following rows:
-
-	Summer
-	Winter
-	{Autumn|Fall}
-	Spring
-
-if the 3rd row is chosen, then either Autumn or Fall will be selected. You could go pretty wild e.g.
-
-	Summer
-	__winter_in_different_languages__
-	{Autumn|Fall}
-	Spring
+Documentation can be found [here](docs/SYNTAX.md)
 
 ### Fuzzy Glob/recursive wildcard file/directory matching
 In addition to standard wildcard tokens such as `__times__` -> `times.txt`, you can also use globbing to match against multiple files at once.

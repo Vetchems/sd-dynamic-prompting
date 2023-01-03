@@ -3,6 +3,7 @@ import logging
 from string import Template
 from pathlib import Path
 import math
+import re
 
 import gradio as gr
 
@@ -48,7 +49,7 @@ if wildcard_dir is None:
 else:
     WILDCARD_DIR = Path(wildcard_dir)
 
-VERSION = "1.2.0"
+VERSION = "1.5.16"
 
 
 wildcard_manager = WildcardManager(WILDCARD_DIR)
@@ -108,7 +109,6 @@ def new_generation(prompt, p) -> PromptGenerator:
     generator = JinjaGenerator(prompt, wildcard_manager, context)
     return generator
 
-
 class Script(scripts.Script):
     def _create_generator(
         self,
@@ -117,6 +117,8 @@ class Script(scripts.Script):
         is_dummy=False,
         is_feeling_lucky=False,
         is_attention_grabber=False,
+        min_attention=1.1,
+        max_attention=1.5,
         enable_jinja_templates=False,
         is_combinatorial=False,
         is_magic_prompt=False,
@@ -139,6 +141,10 @@ class Script(scripts.Script):
             magic_prompt_length: {magic_prompt_length}
             magic_temp_value: {magic_temp_value}
             unlink_seed_from_prompt: {unlink_seed_from_prompt}
+            is_attention_grabber: {is_attention_grabber}
+            min_attention: {min_attention}
+            max_attention: {max_attention}
+
         """
         )
 
@@ -163,7 +169,7 @@ class Script(scripts.Script):
             )
 
         if is_attention_grabber:
-            generator = AttentionGenerator(generator)
+            generator = AttentionGenerator(generator, min_attention=min_attention, max_attention=max_attention)
         return generator
 
     def title(self):
@@ -235,10 +241,27 @@ class Script(scripts.Script):
                         elem_id="is-feelinglucky",
                     )
 
+                with gr.Group():
                     is_attention_grabber = gr.Checkbox(
                         label="Attention grabber",
                         value=False,
                         elem_id="is-attention-grabber",
+                    )
+
+                    min_attention = gr.Slider(
+                        label="Minimum attention",
+                        value=1.1,
+                        minimum=-1,
+                        maximum=2,
+                        step=0.1,
+                    )
+
+                    max_attention = gr.Slider(
+                        label="Maximum attention",
+                        value=1.5,
+                        minimum=-1,
+                        maximum=2,
+                        step=0.1,
                     )
 
                 write_prompts = gr.Checkbox(
@@ -291,6 +314,8 @@ class Script(scripts.Script):
             is_magic_prompt,
             is_feeling_lucky,
             is_attention_grabber,
+            min_attention,
+            max_attention,
             magic_prompt_length,
             magic_temp_value,
             use_fixed_seed,
@@ -312,6 +337,8 @@ class Script(scripts.Script):
         is_magic_prompt,
         is_feeling_lucky,
         is_attention_grabber,
+        min_attention,
+        max_attention,
         magic_prompt_length,
         magic_temp_value,
         use_fixed_seed,
@@ -347,7 +374,7 @@ class Script(scripts.Script):
                 combinatorial_batches = 1
         except (ValueError, TypeError):
             combinatorial_batches = 1
-        
+
         try:
             logger.debug("Creating positive generator")
             generator = self._create_generator(
@@ -355,6 +382,8 @@ class Script(scripts.Script):
                 original_seed,
                 is_feeling_lucky=is_feeling_lucky,
                 is_attention_grabber=is_attention_grabber,
+                min_attention=min_attention,
+                max_attention=max_attention,
                 enable_jinja_templates=enable_jinja_templates,
                 is_combinatorial=is_combinatorial,
                 is_magic_prompt=is_magic_prompt,
@@ -371,6 +400,8 @@ class Script(scripts.Script):
                 original_seed,
                 is_feeling_lucky=is_feeling_lucky,
                 is_attention_grabber=is_attention_grabber,
+                min_attention=min_attention,
+                max_attention=max_attention,
                 enable_jinja_templates=enable_jinja_templates,
                 is_combinatorial=is_combinatorial,
                 is_magic_prompt=is_magic_prompt,
