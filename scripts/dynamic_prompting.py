@@ -205,6 +205,7 @@ class Script(scripts.Script):
 
         with gr.Group(elem_id="dynamic-prompting"):
             with gr.Accordion("Dynamic Prompts", open=False):
+                replace_underscores = gr.Checkbox(label="Replace underscores", value=False)
                 is_enabled = gr.Checkbox(
                     label="Dynamic Prompts enabled",
                     value=True,
@@ -333,6 +334,7 @@ class Script(scripts.Script):
             magic_temp_value,
             use_fixed_seed,
             write_prompts,
+            replace_underscores,
             unlink_seed_from_prompt,
             disable_negative_prompt,
             enable_jinja_templates,
@@ -355,6 +357,7 @@ class Script(scripts.Script):
         magic_temp_value,
         use_fixed_seed,
         write_prompts,
+        replace_underscores,
         unlink_seed_from_prompt,
         disable_negative_prompt,
         enable_jinja_templates,
@@ -453,7 +456,9 @@ class Script(scripts.Script):
         logger.info(
             f"Prompt matrix will create {updated_count} images in a total of {p.n_iter} batches."
         )
-
+        if replace_underscores:
+            all_prompts = [w.replace('_', ' ') for w in all_prompts]
+            #original_prompt = original_prompt.replace('_',' ')
         try:
             
             if write_prompts:
@@ -463,7 +468,7 @@ class Script(scripts.Script):
                 prompt_writer.write_prompts(prompt_filename, original_prompt, original_negative_prompt, all_prompts, all_negative_prompts)
         except Exception as e:
             logger.error(f"Failed to write prompts to file: {e}")
-
+        
         p.all_prompts = all_prompts
         p.all_negative_prompts = all_negative_prompts
         if no_image_generation:
